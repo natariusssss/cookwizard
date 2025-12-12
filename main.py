@@ -1,77 +1,104 @@
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from typing import List, Optional
 from pydantic import BaseModel
-from typing import List
+import models
+from database import engine, get_db
+
+# Создаем таблицы в БД
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CookWizard API")
 
 
-# Модель для рецепта
-class Recipe(BaseModel):
-    id: int
+# Pydantic схемы
+class RecipeBase(BaseModel):
     title: str
     ingredients: List[str]
     instructions: str
     cooking_time: int
-    difficulty: str = "easy"
+    difficulty: str
 
 
-# ТЕСТОВЫЕ ДАННЫЕ (пока без БД)
-fake_recipes_db = [
-    {
-        "id": 1,
-        "title": "Курица с картошкой",
-        "ingredients": ["курица", "картошка", "лук", "морковь"],
-        "instructions": "1. Обжарить курицу\n2. Добавить овощи\n3. Тушить 30 мин",
-        "cooking_time": 40,
-        "difficulty": "easy"
-    },
-    {
-        "id": 2,
-        "title": "Яичница",
-        "ingredients": ["яйца", "соль", "перец"],
-        "instructions": "1. Разбить яйца\n2. Посолить\n3. Жарить 5 мин",
-        "cooking_time": 10,
-        "difficulty": "easy"
-    }
-]
+class RecipeCreate(RecipeBase):
+    pass
 
 
-# Поиск рецептов по ингредиентам
-@app.get("/recipes/search", response_model=List[Recipe])
-def search_recipes(ingredients: str):
+class Recipe(RecipeBase):
+    id: int
 
-    user_ingredients = [i.strip().lower() for i in ingredients.split(",")]
-
-    results = []
-
-    for recipe in fake_recipes_db:
-        recipe_ingredients = [i.lower() for i in recipe["ingredients"]]
-        matches = set(user_ingredients) & set(recipe_ingredients)
-        if matches:
-            recipe_with_score = recipe.copy()
-            recipe_with_score["match_score"] = len(matches)
-            results.append(recipe_with_score)
+    class Config:
+        orm_mode = True
 
 
-    results.sort(key=lambda x: x["match_score"], reverse=True)
-    return results
+# Эндпоинты
+@app.post("/recipes/", response_model=Recipe)
+def create_recipe(recipe: RecipeCreate, db: Session = Depends(get_db)):
+    db_recipe = models.RecipeDB(**recipe.dict())
+    db.add(db_recipe)
+    db.commit()
+    db.refresh(db_recipe)
+    return db_recipe
 
 
-
-@app.get("/recipes", response_model=List[Recipe])
-def get_all_recipes():
-    return fake_recipes_db
-
+@app.get("/recipes/", response_model=List[Recipe])
+def get_all_recipes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    recipes = db.query(models.RecipeDB).offset(skip).limit(limit).all()
+    return recipes
 
 
 @app.get("/recipes/{recipe_id}", response_model=Recipe)
-def get_recipe(recipe_id: int):
-    for recipe in fake_recipes_db:
-        if recipe["id"] == recipe_id:
-            return recipe
-    return {"error": "Recipe not found"}
+def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    recipe = db.query(models.RecipeDB).filter(models.RecipeDB.id == recipe_id).first()
+    if recipe is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return recipe
 
+
+@app.get("/recipes/search/", response_model=List[Recipe])
+def search_recipes(
+        ingredients: str,
+        max_time: Optional[int] = None,
+        difficulty: Optional[str] = None,
+        db: Session = Depends(get_db)
+):
+    user_ingredients = [i.strip().lower() for i in ingredients.split(",")]
+
+    query = db.query(models.RecipeDB)
+
+    recipes = query.all()
+
+    results = []
+    for recipe in recipes:
+        recipe_ingredients = [i.lower() for i in (recipe.ingredients or [])]
+        matches = set(user_ingredients) & set(recipe_ingredients)
+        if matches:
+            recipe_dict = {
+                "id": recipe.id,
+                "title": recipe.title,
+                "ingredients": recipe.ingredients,
+                "instructions": recipe.instructions,
+                "cooking_time": recipe.cooking_time,
+                "difficulty": recipe.difficulty,
+                "match_score": len(matches)
+            }
+            results.append(recipe_dict)
+
+    filtered_results = []
+    for recipe in results:
+        if max_time and recipe["cooking_time"] > max_time:
+            continue
+        if difficulty and recipe["difficulty"] != difficulty.lower():
+            continue
+        filtered_results.append(recipe)
+
+    filtered_results.sort(key=lambda x: x["match_score"], reverse=True)
+
+
+    for recipe in filtered_results:
+        recipe.pop("match_score")
+
+    return filtered_results
 
 
 @app.get("/health")
@@ -86,6 +113,7 @@ def root():
         "endpoints": {
             "search": "/recipes/search?ingredients=курица,картошка",
             "all_recipes": "/recipes",
-            "docs": "/docs"
+            "docs": "/docs",
+            "health": "/health"
         }
     }
