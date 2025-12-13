@@ -381,20 +381,48 @@ RECIPES_DATA = [
 def seed_database():
     db = SessionLocal()
 
-    existing = db.query(models.RecipeDB).count()
-    if existing > 0:
-        print(f"В базе уже есть {existing} рецептов. Пропускаем заполнение.")
+    try:
+        existing = db.query(models.RecipeDB).count()
+        print(f"📊 Проверка базы: сейчас {existing} рецептов")
+
+        if existing >= 50:
+            print(f"✅ База уже заполнена ({existing} рецептов)")
+            db.close()
+            return
+
+
+        if existing > 0:
+            print(f"🗑️ Удаляем {existing} старых рецептов...")
+            db.query(models.RecipeDB).delete()
+            db.commit()
+
+        print(f"➕ Добавляем {len(RECIPES_DATA)} рецептов...")
+        for i, recipe_data in enumerate(RECIPES_DATA, 1):
+            recipe = models.RecipeDB(**recipe_data)
+            db.add(recipe)
+            if i % 10 == 0:  # Прогресс каждые 10 рецептов
+                print(f"   Прогресс: {i}/{len(RECIPES_DATA)}")
+
+        db.commit()
+
+
+        final_count = db.query(models.RecipeDB).count()
+        print(f"\n✅ ГОТОВО! В базе: {final_count} рецептов")
+
+        if final_count == 50:
+            print("🎉 Все 50 рецептов успешно добавлены!")
+        else:
+            print(f"⚠️ Внимание: должно быть 50, а есть {final_count}")
+
+    except Exception as e:
+        print(f"❌ Ошибка при заполнении базы: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+
+    finally:
         db.close()
-        return
-
-    for recipe_data in RECIPES_DATA:
-        recipe = models.RecipeDB(**recipe_data)
-        db.add(recipe)
-
-    db.commit()
-    print(f"Добавлено {len(RECIPES_DATA)} тестовых рецептов.")
-    db.close()
-
 
 if __name__ == "__main__":
     seed_database()
+
