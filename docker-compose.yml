@@ -29,6 +29,15 @@ services:
     command: >
       sh -c "python seed_data.py &&
              uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
-
+  frontend:
+    build:
+      context: .
+      dockerfile: streamlit.dockerfile
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+    volumes:
+      - .:/app
 volumes:
   postgres_data:
