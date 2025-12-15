@@ -1,0 +1,6 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY bot_requirements.txt .
+RUN pip install --no-cache-dir -r bot_requirements.txt
+COPY . .
+CMD ["python", "CookWizardBot.py"]
