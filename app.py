@@ -4,6 +4,44 @@ import pandas as pd
 from typing import List, Optional
 from collections import Counter
 import altair as alt
+import torch
+from torchvision import models, transforms
+from PIL import Image
+import json
+@st.cache_resource
+def load_ml_model():
+    model=models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+    model.eval()
+    try:
+        with open('imagenet_classes.json') as f:
+            idx_to_class=json.load(f)
+    except FileNotFoundError:
+        st.warning("Файл 'imagenet_classes.json' не найден. Распознавание будет использовать только индексы.")
+        idx_to_class=None
+    return model, idx_to_class
+preprocess = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+def classify_image(image: Image.Image, model, idx_to_class, top_k=5) -> List[str]:
+    img_tensor=preprocess(image)
+    img_tensor=img_tensor.unsqueeze(0)
+    with torch.no_grad():
+        output=model(img_tensor)
+    probabilities=torch.nn.functional.softmax(output[0], dim=0)
+    top_prob, top_catid=torch.topk(probabilities, top_k)
+    recognized_items = []
+    for i in range(top_k):
+        class_id=top_catid[i].item()
+        if idx_to_class:
+            class_name=idx_to_class[str(class_id)].split(',')[0].strip()
+        else:
+            class_name=f"Object_{class_id}"
+
+        recognized_items.append(class_name)
+    return recognized_items
 api_base_url = "http://backend:8000"
 search_endpoint = "/search"
 st.set_page_config(layout="wide")
