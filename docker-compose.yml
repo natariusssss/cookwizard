@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -14,14 +16,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
   telegram-bot:
     build:
-      context: .
+      context: ./bot
       dockerfile: BotDockerfile
-    env_file: .env  
+    environment:
+      DATABASE_URL: postgresql://user:pass@postgres:5432/cookwizard
+      BOT_TOKEN: 8170939011:AAFzbngRxYAusJTYApD2Pxi47BWsUCqT5Es
     restart: unless-stopped
-    container_name: cookwizard
-    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
   backend:
     build: ./backend
     ports:
@@ -36,16 +45,17 @@ services:
     command: >
       sh -c "python seed_data.py &&
              uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+
   frontend:
     build:
-      context: .
+      context: ./frontend
       dockerfile: streamlit.dockerfile
     ports:
       - "8501:8501"
     depends_on:
       - backend
     volumes:
-      - .:/app
+      - ./frontend:/app
+
 volumes:
   postgres_data:
-
