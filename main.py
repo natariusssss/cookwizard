@@ -5,13 +5,13 @@ from pydantic import BaseModel
 import models
 from database import engine, get_db
 
-# Создаем таблицы в БД
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CookWizard API")
 
+app.router.redirect_slashes = False
 
-# Pydantic схемы
+
 class RecipeBase(BaseModel):
     title: str
     ingredients: List[str]
@@ -31,8 +31,62 @@ class Recipe(RecipeBase):
         orm_mode = True
 
 
-# Эндпоинты
-@app.post("/recipes/", response_model=Recipe)
+@app.get("/api/search")
+def search_recipes(
+        ingredients: str = Query(..., description="Ингредиенты через запятую"),
+        max_time: Optional[int] = None,
+        difficulty: Optional[str] = None,
+        db: Session = Depends(get_db)
+):
+
+    print(f"🔍 ПОИСК ВЫЗВАН: {ingredients}")
+
+    user_ingredients = [i.strip().lower() for i in ingredients.split(",")]
+
+    recipes = db.query(models.RecipeDB).all()
+
+    results = []
+    for recipe in recipes:
+        if not recipe.ingredients:
+            continue
+
+        recipe_ingredients = [i.lower() for i in recipe.ingredients]
+        matches = set(user_ingredients) & set(recipe_ingredients)
+
+        if matches:
+            if max_time and recipe.cooking_time > max_time:
+                continue
+            if difficulty and recipe.difficulty != difficulty.lower():
+                continue
+
+            results.append({
+                "id": recipe.id,
+                "title": recipe.title,
+                "ingredients": recipe.ingredients,
+                "instructions": recipe.instructions,
+                "cooking_time": recipe.cooking_time,
+                "difficulty": recipe.difficulty,
+            })
+
+    print(f"✅ Найдено {len(results)} рецептов")
+    return results
+
+
+@app.get("/api/recipes")
+def get_all_recipes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    recipes = db.query(models.RecipeDB).offset(skip).limit(limit).all()
+    return recipes
+
+
+@app.get("/api/recipes/{recipe_id}")
+def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    recipe = db.query(models.RecipeDB).filter(models.RecipeDB.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return recipe
+
+
+@app.post("/api/recipes")
 def create_recipe(recipe: RecipeCreate, db: Session = Depends(get_db)):
     db_recipe = models.RecipeDB(**recipe.dict())
     db.add(db_recipe)
@@ -41,79 +95,19 @@ def create_recipe(recipe: RecipeCreate, db: Session = Depends(get_db)):
     return db_recipe
 
 
-@app.get("/recipes/", response_model=List[Recipe])
-def get_all_recipes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    recipes = db.query(models.RecipeDB).offset(skip).limit(limit).all()
-    return recipes
-
-
-@app.get("/recipes/{recipe_id}", response_model=Recipe)
-def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
-    recipe = db.query(models.RecipeDB).filter(models.RecipeDB.id == recipe_id).first()
-    if recipe is None:
-        raise HTTPException(status_code=404, detail="Recipe not found")
-    return recipe
-
-
-@app.get("/recipes/search/", response_model=List[Recipe])
-def search_recipes(
-        ingredients: str,
-        max_time: Optional[int] = None,
-        difficulty: Optional[str] = None,
-        db: Session = Depends(get_db)
-):
-    user_ingredients = [i.strip().lower() for i in ingredients.split(",")]
-
-    query = db.query(models.RecipeDB)
-
-    recipes = query.all()
-
-    results = []
-    for recipe in recipes:
-        recipe_ingredients = [i.lower() for i in (recipe.ingredients or [])]
-        matches = set(user_ingredients) & set(recipe_ingredients)
-        if matches:
-            recipe_dict = {
-                "id": recipe.id,
-                "title": recipe.title,
-                "ingredients": recipe.ingredients,
-                "instructions": recipe.instructions,
-                "cooking_time": recipe.cooking_time,
-                "difficulty": recipe.difficulty,
-                "match_score": len(matches)
-            }
-            results.append(recipe_dict)
-
-    filtered_results = []
-    for recipe in results:
-        if max_time and recipe["cooking_time"] > max_time:
-            continue
-        if difficulty and recipe["difficulty"] != difficulty.lower():
-            continue
-        filtered_results.append(recipe)
-
-    filtered_results.sort(key=lambda x: x["match_score"], reverse=True)
-
-
-    for recipe in filtered_results:
-        recipe.pop("match_score")
-
-    return filtered_results
-
-
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "service": "backend"}
+    return {"status": "healthy"}
 
 
 @app.get("/")
 def root():
     return {
-        "message": "CookWizard API is running!",
+        "message": "CookWizard API v2",
         "endpoints": {
-            "search": "/recipes/search?ingredients=курица,картошка",
-            "all_recipes": "/recipes",
-            "docs": "/docs",
-            "health": "/health"
+            "search": "/api/search?ingredients=chicken,potato",
+            "all_recipes": "/api/recipes",
+            "get_recipe": "/api/recipes/{id}",
+            "docs": "/docs"
         }
     }
