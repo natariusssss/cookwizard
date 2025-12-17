@@ -10,6 +10,14 @@ import json
 import torch
 from torchvision import models, transforms
 from PIL import Image
+INGREDIENT_TRANSLATION = {
+    "banana": "банан",
+    "broccoli": "брокколи",
+    "strawberry": "клубника",
+    "lemon": "лимон",
+    "pineapple": "ананас",
+    "pomegranate": "гранат",
+}
 dp = Dispatcher()
 token = os.getenv("BOT_TOKEN")
 API_URL = os.getenv("API_URL", "http://localhost:8000")
@@ -32,7 +40,8 @@ def classify_image(image: Image.Image, model, idx_to_class):
     probabilities = torch.nn.functional.softmax(output[0], dim=0)
     top_prob, top_catid = torch.topk(probabilities, 1)
     class_id = top_catid[0].item()
-    return idx_to_class[str(class_id)].split(',')[0].strip()
+    class_info = idx_to_class[str(class_id)]
+    return class_info[1].strip()
 model, idx_to_class = load_ml_model()
 class Api:
     def __init__(self, base_url: str):
@@ -71,8 +80,12 @@ async def handle_photo_search(message: Message):
     photo_bytes = await message.bot.download_file(photo_file.file_path)
     image = Image.open(io.BytesIO(photo_bytes.read()))
     product_name = classify_image(image, model, idx_to_class)
-    await message.answer(f"Я вижу на фото: <b>{product_name}</b>\nИщу рецепты...", parse_mode=ParseMode.HTML)
-    recipe = await api.search_recipe_by_ingredients(product_name)
+    product_name_ru = INGREDIENT_TRANSLATION.get(
+        product_name.lower(),
+        product_name
+    )
+    await message.answer(f"Я вижу на фото: <b>{product_name_ru}</b>\nИщу рецепты...", parse_mode=ParseMode.HTML)
+    recipe = await api.search_recipe_by_ingredients(product_name_ru)
     if recipe:
         answer = "🍳 Найденные рецепты:\n\n"
         for i, rec in enumerate(recipe, 1):
