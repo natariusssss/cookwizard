@@ -28,8 +28,10 @@ CookWizard решает проблему: **"Что приготовить из 
 
 📥 Клонирование репозитория
 git clone https://github.com/natariusssss/cookwizard
+
 cd cookwizard
 
 🐳 Запуск проекта
 cp .env.example .env
+
 docker-compose up
