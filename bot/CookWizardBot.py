@@ -46,26 +46,27 @@ class Api:
             param = {"title": name}
             responce = requests.get(f"{self.base_url}/api/search", params=param)
             return responce.json()
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             return None
     async def Search_recipe_by_time(self, time: int):
         try:
             param = {"max_time": time}
             responce = requests.get(f"{self.base_url}/api/search", params=param)
             return responce.json()
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             return None
     async def Search_recipe_by_difficulty(self, diff: str):
         try:
             param = {"difficulty": diff}
             responce = requests.get(f"{self.base_url}/api/search", params=param)
             return responce.json()
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             return None
 api = Api(API_URL)
 bot = Bot(token)
 @dp.message(F.photo)
 async def handle_photo_search(message: Message):
+    print("Лог: Получено фото для анализа")
     photo_file = await message.bot.get_file(message.photo[-1].file_id)
     photo_bytes = await message.bot.download_file(photo_file.file_path)
     image = Image.open(io.BytesIO(photo_bytes.read()))
@@ -80,29 +81,21 @@ async def handle_photo_search(message: Message):
         await message.answer(answer)
         dp.current_user_data = recipe
     else:
-        await message.answer(" Ничего не найдено по этому продукту.")
+        await message.answer("Ничего не найдено по этому продукту.")
 @dp.message(Command("start"))
 async def start(message: types.Message):
     await message.answer("Привет! Я CookWizard бот\nВведите /help для отображения всех возможных команд")
-async def set_default_commands(bot: Bot):
-    commands = [
-        BotCommand(command="start", description="Запустить бота"),
-        BotCommand(command="help", description="Помощь"),
-        BotCommand(command="name", description="поиск по названию"),
-        BotCommand(command="product", description="Поиск по ингредиентам"),
-        BotCommand(command="time", description="Поиск по времени"),
-        BotCommand(command="diff", description="Поиск по сложности")
-    ]
-    await bot.set_my_commands(commands, BotCommandScopeDefault())
-
-
+@dp.message(Command("help"))
+async def help_cmd(message: Message):
+    text = "<b>Список команд бота:</b>\n/start, /help, /name, /product, /time, /diff\nИли просто пришли мне ФОТО ингредиента (проверка на апдейт)!"
+    await message.answer(text, parse_mode=ParseMode.HTML)
 @dp.message(Command("name"))
 async def search_name(message: Message):
     name = message.text.split()[1:]
     if not name:
         await message.answer("Использование: /name <название блюда>")
         return
-    full_query = "".join(name)
+    full_query = " ".join(name)
     recipe = await api.Search_recipe_by_name(full_query)
     if recipe:
         answer = "🍳 Найденные рецепты:\n\n"
@@ -116,15 +109,15 @@ async def search_name(message: Message):
 
 
 @dp.message(Command("product"))
-async def search(message: Message):
+async def search_prod(message: Message):
     name = message.text.split()[1:]
     if not name:
-        await message.answer("Использование: /product <название ингредиента>, <название ингредиента>, ...")
+        await message.answer("Использование: /product <ингредиент1>, <ингредиент2>...")
         return
     full = "".join(name)
     recipe = await api.search_recipe_by_ingredients(full)
     if recipe:
-        answer = f"🍳 Найденные рецепты:\n\n"
+        answer = "🍳 Найденные рецепты:\n\n"
         for i, rec in enumerate(recipe, 1):
             answer += f"{i}. {rec['title']} ({rec['cooking_time']} мин.)\n"
         answer += "\n📝 Для просмотра рецепта введите его номер:"
@@ -134,15 +127,14 @@ async def search(message: Message):
         await message.answer("🔍❌По вашему запросу ничего не найдено")
 
 @dp.message(Command("diff"))
-async def search(message: Message):
+async def search_diff(message: Message):
     name = message.text.split()[1:]
     if not name:
-        await message.answer("Использование: /diff <сложность>")
+        await message.answer("Использование: /diff <easy/medium/hard>")
         return
-    full = "".join(name)
-    recipe = await api.Search_recipe_by_difficulty(full)
+    recipe = await api.Search_recipe_by_difficulty(name[0])
     if recipe:
-        answer = f"🍳 Найденные рецепты:\n\n"
+        answer = "🍳 Найденные рецепты:\n\n"
         for i, rec in enumerate(recipe, 1):
             answer += f"{i}. {rec['title']} ({rec['cooking_time']} мин.)\n"
         answer += "\n📝 Для просмотра рецепта введите его номер:"
@@ -153,23 +145,18 @@ async def search(message: Message):
 
 @dp.message(Command("time"))
 async def search_time(message: Message):
-    time = message.text.split()[1:]
-    if time:
-        if len(time) == 1:
-            full = "".join(time)
-            if not full.isdigit():
-                await message.answer("❌Время должно быть числом")
-                return
-            recipe = await api.Search_recipe_by_time(int(full))
-            if recipe:
-                answer = f"🍳 Найденные рецепты:\n\n"
-                for i, rec in enumerate(recipe, 1):
-                    answer += f"{i}. {rec['title']} ({rec['cooking_time']} мин.)\n"
-                answer += "\n📝 Для просмотра рецепта введите его номер:"
-                await message.answer(answer)
-                dp.current_user_data = recipe
-            else:
-                await message.answer("🔍❌По вашему запросу ничего не найдено")
+    time_args = message.text.split()[1:]
+    if time_args and time_args[0].isdigit():
+        recipe = await api.Search_recipe_by_time(int(time_args[0]))
+        if recipe:
+            answer = "🍳 Найденные рецепты:\n\n"
+            for i, rec in enumerate(recipe, 1):
+                answer += f"{i}. {rec['title']} ({rec['cooking_time']} мин.)\n"
+            answer += "\n📝 Для просмотра рецепта введите его номер:"
+            await message.answer(answer)
+            dp.current_user_data = recipe
+        else:
+            await message.answer("🔍❌По вашему запросу ничего не найдено")
 
 
 @dp.message(lambda message: message.text.isdigit())
@@ -185,10 +172,19 @@ async def select_recipe(message: Message):
         else:
             await message.answer("❌ Неверный номер рецепта")
 
-@dp.message(Command("help"))
-async def help(message: Message):
-    text = "<b>Список команд бота:</b>\n/start, /help, /name, /product, /time, /diff\nИли просто пришли мне ФОТО ингредиента!"
-    await message.answer(text, parse_mode=ParseMode.HTML)
+@dp.message()
+async def handle_any(message: Message):
+    await message.answer("Неизвестная команда. Пришлите фото продукта или используйте /help")
+async def set_default_commands(bot: Bot):
+    commands = [
+        BotCommand(command="start", description="Запустить"),
+        BotCommand(command="help", description="Помощь"),
+        BotCommand(command="name", description="По названию"),
+        BotCommand(command="product", description="По ингредиентам"),
+        BotCommand(command="time", description="По времени"),
+        BotCommand(command="diff", description="По сложности")
+    ]
+    await bot.set_my_commands(commands, BotCommandScopeDefault())
 
 
 async def main():
