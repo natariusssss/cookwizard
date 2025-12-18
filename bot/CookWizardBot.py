@@ -100,7 +100,7 @@ async def start(message: types.Message):
     await message.answer("Привет! Я CookWizard бот\nВведите /help для отображения всех возможных команд")
 @dp.message(Command("help"))
 async def help_cmd(message: Message):
-    text = "<b>Список команд бота:</b>\n/start, /help, /name, /product, /time, /diff\nИли просто пришли мне ФОТО ингредиента (проверка на апдейт)!"
+    text = "<b>Список команд бота:</b>\n/start, /help, /name, /product, /time, /diff\nИли просто пришли мне ФОТО ингредиента!"
     await message.answer(text, parse_mode=ParseMode.HTML)
 @dp.message(Command("name"))
 async def search_name(message: Message):

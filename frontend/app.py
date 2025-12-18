@@ -84,7 +84,7 @@ with tab1:
         user_ingredients = st.text_input(
             "Введите ингредиенты через запятую",
             value="",
-            placeholder="например: курица, картошка, морковь"
+            placeholder="например: курица, картофель, морковь"
         )
     else:
         user_ingredients = ""
@@ -93,7 +93,7 @@ with tab1:
         recipe_title = st.text_input(
             "Введите название рецепта",
             value="",
-            placeholder="например: курица с картошкой"
+            placeholder="например: курица с картофелем"
         )
     else:
         recipe_title = ""
@@ -170,7 +170,7 @@ with tab1:
                 "max_time": max_time,
                 "difficulty": difficulty if difficulty != "Все" else None,
                 "found_recipes": total_matches,
-                "recipes": recipes[:2] if recipes else []  # Сохраняем первые 2 рецепта
+                "recipes": recipes[:2] if recipes else []
             }
 
             st.session_state.search_history.insert(0, search_entry)
@@ -206,7 +206,7 @@ with tab1:
                         st.markdown(f"**Сложность:** {difficulty_display}")
                         if isinstance(recipe, dict) and 'ingredients' in recipe:
                             st.markdown("**Ингредиенты:**")
-                            for ingredient in recipe['ingredients'][:10]:  # Показываем первые 10
+                            for ingredient in recipe['ingredients'][:10]:
                                 st.markdown(f"- {ingredient}")
 
                             if len(recipe['ingredients']) > 10:
