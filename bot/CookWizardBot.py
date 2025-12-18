@@ -47,30 +47,37 @@ class Api:
     def __init__(self, base_url: str):
         self.base_url = base_url
     async def search_recipe_by_ingredients(self, ingredients: str):
-        param = {"ingredients": ingredients}
-        responce = requests.get(f"{self.base_url}/api/search", timeout=5, params=param)
-        return responce.json()
+        try:
+            param = {"ingredients": ingredients}
+            responce = requests.get(f"{self.base_url}/api/search", timeout=5, params=param)
+            return responce.json()
+        except requests.exceptions.RequestException as e:
+            print(e)
+            raise 
     async def Search_recipe_by_name(self, name: str):
         try:
             param = {"title": name}
             responce = requests.get(f"{self.base_url}/api/search", params=param)
             return responce.json()
-        except requests.exceptions.RequestException:
-            return None
+        except requests.exceptions.RequestException as e:
+            print(e)
+            raise 
     async def Search_recipe_by_time(self, time: int):
         try:
             param = {"max_time": time}
             responce = requests.get(f"{self.base_url}/api/search", params=param)
             return responce.json()
-        except requests.exceptions.RequestException:
-            return None
+        except requests.exceptions.RequestException as e:
+            print(e)
+            raise 
     async def Search_recipe_by_difficulty(self, diff: str):
         try:
             param = {"difficulty": diff}
             responce = requests.get(f"{self.base_url}/api/search", params=param)
             return responce.json()
-        except requests.exceptions.RequestException:
-            return None
+        except requests.exceptions.RequestException as e:
+            print(e)
+            raise 
 api = Api(API_URL)
 bot = Bot(token)
 @dp.message(F.photo)
